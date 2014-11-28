@@ -1,0 +1,64 @@
+---
+- hosts: droplets
+  vars:
+    user: deploy
+  remote_user: deploy
+
+  tasks:
+    - name: Update apt
+      apt: update_cache=true
+      sudo: yes
+
+    - name: Installs essential dependencies
+      action: apt pkg={{item}} state=latest
+      sudo: yes
+      with_items: 
+      - git-core
+      - curl
+      - zlib1g-dev
+      - build-essential
+      - libssl-dev
+      - libreadline-dev
+      - libyaml-dev
+      - libsqlite3-dev
+      - sqlite3
+      - libxml2-dev
+      - libxslt1-dev
+      - libcurl4-openssl-dev
+      - python-software-properties
+      - nodejs
+
+    - name: Generate ssh key
+      user: name={{ user }} generate_ssh_key=yes ssh_key_bits=2048
+
+    - copy: src=./rbenv dest=/home/{{ user }}/rbenv_installer.sh mode=755 force=no
+    - shell: /home/{{ user }}/rbenv_installer.sh
+      run_once: true
+
+    - name: install rbenv 2.1.3
+      shell: PATH=/home/{{ user }}/.rbenv/plugins/ruby-build/bin:/home/{{ user }}/.rbenv/shims:/home/{{ user }}/.rbenv/bin:$PATH rbenv install 2.1.3
+      run_once: true
+    - name: set rbenv global 2.1.3  
+      shell: PATH=/home/{{ user }}/.rbenv/plugins/ruby-build/bin:/home/{{ user }}/.rbenv/shims:/home/{{ user }}/.rbenv/bin:$PATH rbenv global 2.1.3
+      run_once: true
+    - name: Tell RubyGems dont install doc
+      shell: echo "gem: --no-ri --no-rdoc" > ~/.gemrc
+      run_once: true
+
+    - name: Ensure the PGP key is installed
+      apt_key: id=AC40B2F7 state=present url="http://keyserver.ubuntu.com/pks/lookup?op=get&fingerprint=on&search=0x561F9B9CAC40B2F7"
+
+    - name: Ensure https support for apt is installed
+      apt: pkg=apt-transport-https state=present
+
+    - name: Ensure the passenger apt repository is added
+      apt_repository: state=present repo='deb https://oss-binaries.phusionpassenger.com/apt/passenger trusty main'
+
+    - name: Ensure nginx is installed
+      apt: pkg=nginx-full state=present
+
+    - name: Ensure passenger is installed
+      apt: pkg=passenger state=present update_cache=yes
+
+    - name: Ensure nginx is running
+      service: name=nginx state=started
